@@ -4,6 +4,7 @@ import skimage.io
 
 directory = './data/'
 images_path = './samples/'
+bg_file = open('bg.txt', 'w')
 
 if not os.path.exists(directory):
     os.makedirs(directory)
@@ -18,5 +19,8 @@ for img_name in img_names:
 	for i in range(0, w - 128, 32):
 		for j in range(0, h - 128, 32):
 			crop_img = img[j:(j + 128), i:(i + 128)]
-			cv2.imwrite(directory + '%s.ppm' % name, crop_img)
+			img_full_path = directory + str(name) + '.ppm'
+			cv2.imwrite(img_full_path, crop_img)
+			bg_file.write(img_full_path + '\n')
 			name += 1
+bg_file.close()
