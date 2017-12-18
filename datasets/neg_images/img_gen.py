@@ -16,8 +16,8 @@ for img_name in img_names:
 	img = cv2.imread(images_path + img_name)
 	h, w, channel = skimage.io.imread(images_path + img_name).shape
 
-	for i in range(0, w - 128, 32):
-		for j in range(0, h - 128, 32):
+	for i in range(0, w - 128, 128):
+		for j in range(0, h - 128, 128):
 			crop_img = img[j : (j + 128), i : (i + 128)]
 			img_full_path = output_dir + '0_' + str(name) + '.ppm'
 			cv2.imwrite(img_full_path, crop_img)
