@@ -39,10 +39,11 @@ while (video.isOpened()):
                                   feed_dict={"images_ph:0": [resized_sign]})[0][0]
 
         if predicted != NEG_IMAGE_CLASS:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            print(predicted)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 2)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            cv2.putText(frame, str(predicted), (x, y - 10), font, 0.5, (255, 0, 255), 2, cv2.LINE_AA)
     
-    cv2.imshow('f', frame)
+    cv2.imshow('frame', frame)
     out.write(frame)
 
 video.release()
