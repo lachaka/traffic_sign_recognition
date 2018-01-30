@@ -25,7 +25,7 @@ JNIEXPORT void JNICALL Java_com_speedcam_OpenCVDetection_signDetection
     {
         Point start_p(signs[i].x, signs[i].y);
         Point end_p(signs[i].x + signs[i].width, signs[i].y + signs[i].height);
-        rectangle(frame, start_p, end_p, Scalar(255, 0, 255 ), 2);
+        rectangle(frame, start_p, end_p, Scalar(255, 0, 255 ), 1);
     }
   }
 

@@ -54,6 +54,8 @@ public class MainActivity extends AppCompatActivity
 
         cameraView = findViewById(R.id.camera_view);
         cameraView.setVisibility(SurfaceView.VISIBLE);
+        cameraView.setMaxFrameSize(320, 240);
+        
         cameraView.setCvCameraViewListener(this);
     }
 /*
