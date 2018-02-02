@@ -18,13 +18,15 @@
             android:layout_height="match_parent"
             android:layout_weight="1" />
 
-        <EditText
-            android:id="@+id/editText2"
+        <TextView
+            android:id="@+id/speed_view"
+            android:layout_centerHorizontal="true"
+            android:textColor="@android:color/holo_red_dark"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:ems="10"
-            android:layout_centerHorizontal="true"
-            android:inputType="number" />
+            android:text="km/h" />
+
+
     </RelativeLayout>
 
 
@@ -35,7 +37,7 @@
             android:layout_alignParentBottom="true">
 
             <ImageView
-                android:id="@+id/my_image"
+                android:id="@+id/sign_view"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentBottom="true"

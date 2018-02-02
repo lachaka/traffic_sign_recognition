@@ -2,10 +2,12 @@ package com.speedcam;
 
 
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.SurfaceView;
 import android.view.WindowManager;
+import android.widget.ImageView;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -21,24 +23,31 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
+import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 
+import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
 
-import static org.opencv.imgproc.Imgproc.COLOR_BGRA2GRAY;
+import static com.speedcam.Constants.CASCADE_FILE_PATH;
+import static com.speedcam.Constants.COLOR_CHANNELS;
+import static com.speedcam.Constants.IMAGE_HEIGHT;
+import static com.speedcam.Constants.IMAGE_WIDTH;
+import static com.speedcam.Constants.INPUT_NODE;
+import static com.speedcam.Constants.OUTPUT_NODE;
 
 public class MainActivity extends AppCompatActivity
         implements CameraBridgeViewBase.CvCameraViewListener2 {
 
     private static final String TAG = MainActivity.class.getName();
-    private static final String CASCADE_FILE_PATH = "/storage/emulated/0/data/cascade.xml";
-    private static final int IMAGE_WIDTH = 32;
-    private static final int IMAGE_HEIGHT = 32;
 
     private LoadSignClassifier signClassifier;
 
+    private ImageView signView;
     private JavaCameraView cameraView;
     private Mat frame;
 
+    private HashMap<Long, Integer> signImages;
 
     BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -55,15 +64,33 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        signClassifier = new LoadSignClassifier(getAssets());
+        initSignImages();
 
+        signClassifier = new LoadSignClassifier(getAssets());
+        signView = findViewById(R.id.sign_view);
         cameraView = findViewById(R.id.camera_view);
         cameraView.setVisibility(SurfaceView.VISIBLE);
         cameraView.setMaxFrameSize(320, 240);
         cameraView.setCvCameraViewListener(this);
+
+    }
+
+    private void initSignImages() {
+        signImages = new HashMap<>();
+
+        long count = 0;
+        for (Field field : R.drawable.class.getFields()) {
+            if (field.getName().contains("sign_number")) {
+                try {
+                    field.setAccessible(true);
+                    signImages.put(count++, field.getInt(R.drawable.class));
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     @Override
@@ -108,7 +135,7 @@ public class MainActivity extends AppCompatActivity
 
         MatOfRect detectedObjects = new MatOfRect();
         Mat frameGray = new Mat();
-        Imgproc.cvtColor(frame, frameGray, COLOR_BGRA2GRAY);
+        Imgproc.cvtColor(frame, frameGray, Imgproc.COLOR_BGRA2GRAY);
         CascadeClassifier cascadeDetector = new CascadeClassifier(CASCADE_FILE_PATH);
 
         cascadeDetector.detectMultiScale(frameGray, detectedObjects);
@@ -156,6 +183,30 @@ public class MainActivity extends AppCompatActivity
         if (signNumber != 43) {
             Imgproc.rectangle(frame, sign.tl(), sign.br(),
                     new Scalar(255, 0, 255), 1);
+        }
+    }
+
+    public class SignRecognition extends AsyncTask<Object, Void, Long> {
+
+        @Override
+        protected Long doInBackground(Object... objects) {
+            TensorFlowInferenceInterface tfInterface = (TensorFlowInferenceInterface) objects[0];
+            float[] inputData = (float[]) objects[1];
+
+            long[] outputResult = {0, 0};
+            tfInterface.feed(INPUT_NODE, inputData, 1,
+                    IMAGE_WIDTH, IMAGE_HEIGHT, COLOR_CHANNELS);
+            tfInterface.run(new String[]{OUTPUT_NODE}, false);
+            tfInterface.fetch("prediction", outputResult);
+
+            return outputResult[0];
+        }
+
+        @Override
+        protected void onPostExecute(Long signNumber) {
+            if (signNumber < 8) { //TODO: add all signs
+                signView.setImageResource(signImages.get(signNumber));
+            }
         }
     }
 }
