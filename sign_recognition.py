@@ -1,3 +1,7 @@
+# Detecting traffic sign from a video file
+# Change 'PATH_TO_CHANGE'.
+
+
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,9 +14,8 @@ NEG_IMAGE_CLASS = 43
 IMAGE_WIDTH = 32
 IMAGE_LENGTH = 32
 
-sign_cascade = cv2.CascadeClassifier('./opencv_data/cascade.xml')
-video = cv2.VideoCapture('./datasets/videos/TS2011video4.wmv')
-
+sign_cascade = cv2.CascadeClassifier('./opencv_training/haar_classifier/cascade.xml')
+video = cv2.VideoCapture('PATH_TO_CHANGE')
 
 ret, frame = video.read()
 h, w, channel = frame.shape

@@ -2,7 +2,7 @@ import os
 from skimage import io
 
 info_file = open('signs.info', 'w')
-path = './datasets/training_images/Final_Training/Images'
+path = '../datasets/training_images/Final_Training/Images'
 directories = [d for d in os.listdir(path)
                if os.path.isdir(os.path.join(path, d))]
 for d in directories:
