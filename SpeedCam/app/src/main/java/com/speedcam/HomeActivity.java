@@ -172,7 +172,7 @@ public class HomeActivity extends AppCompatActivity
             if (detectedSigns.size() != 0) {
                 for (Integer detectedSign : detectedSigns) {
                     if (detectedSign != 44 && !signList.contains(signImages.get(detectedSign))) {
-                        signList.add(signImages.get(detectedSign));
+                        signList.add(0, signImages.get(detectedSign));
                     }
                 }
                 signAdapter.notifyDataSetChanged();
