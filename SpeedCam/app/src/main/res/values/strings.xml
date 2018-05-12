@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">SpeedCam</string>
+    <string name="grantedPermissions">You have already granted the necessary permissions!</string>
 </resources>

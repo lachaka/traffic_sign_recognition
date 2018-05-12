@@ -7,9 +7,8 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.SurfaceView;
-import android.view.Window;
 import android.view.WindowManager;
-import android.widget.ImageView;
+import android.widget.ListView;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -24,6 +23,7 @@ import org.opencv.core.Rect;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
+import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -33,11 +33,10 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Set;
 
 import static com.speedcam.Constants.COLOR_CHANNELS;
-import static com.speedcam.Constants.IMAGE_HEIGHT;
-import static com.speedcam.Constants.IMAGE_WIDTH;
+import static com.speedcam.Constants.IMAGE_SIZE;
 import static com.speedcam.Constants.INPUT_NODE;
 import static com.speedcam.Constants.OUTPUT_NODE;
 
@@ -47,16 +46,18 @@ public class HomeActivity extends AppCompatActivity
 
     private static final String TAG = HomeActivity.class.getName();
 
-    private LoadSignClassifier signClassifier;
+    private TensorFlowInferenceInterface signClassifier;
     private CascadeClassifier cascadeClassifier;
 
-    private ImageView signView;
     private JavaCameraView cameraView;
 
     private Mat frame;
     private File mCascadeFile;
+    ListView signView;
+    private HashMap<Integer, Integer> signImages;
 
-    private HashMap<Long, Integer> signImages;
+    private ArrayList<Integer> signList;
+    private SignAdapter signAdapter;
 
     BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -73,18 +74,21 @@ public class HomeActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         setContentView(R.layout.activity_home);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        signList = new ArrayList<>();
 
-        signClassifier = new LoadSignClassifier(getAssets());
+        signView = findViewById(R.id.signList);
+        signAdapter = new SignAdapter(HomeActivity.this, signList);
+        signView.setAdapter(signAdapter);
+
+        signClassifier = new TensorFlowInferenceInterface(getAssets(), Constants.TENSORFLOW_MODEL_FILE);
+
         initSignImages();
-        signView = findViewById(R.id.sign_view);
         cameraView = findViewById(R.id.camera_view);
         cameraView.setVisibility(SurfaceView.VISIBLE);
-
+        cameraView.setMaxFrameSize(320,480);
         cameraView.setCvCameraViewListener(this);
     }
 
@@ -127,13 +131,14 @@ public class HomeActivity extends AppCompatActivity
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         frame = inputFrame.rgba();
-        new ObjectDetection().execute(cascadeClassifier, frame);
+      //  Mat croppedFrame = frame.submat(0, frame.cols(), frame.cols() / 2, frame.cols());
+        new SignRecognition().execute(cascadeClassifier, frame);
         return frame;
     }
 
-    private class ObjectDetection extends AsyncTask<Object, Void, List<Long>> {
+    private class SignRecognition extends AsyncTask<Object, Void, Set<Integer>> {
         @Override
-        protected List doInBackground(Object[] objects) {
+        protected Set doInBackground(Object[] objects) {
             CascadeClassifier cascadeClassifier = (CascadeClassifier) objects[0];
             Mat frame = (Mat) objects[1];
 
@@ -142,38 +147,35 @@ public class HomeActivity extends AppCompatActivity
             Imgproc.cvtColor(frame, frameGray, Imgproc.COLOR_BGRA2GRAY);
 
             cascadeClassifier.detectMultiScale(frameGray, detectedObjects);
-            List<Long> detectedSigns = new ArrayList<>();
+            Set<Integer> detectedSigns = new HashSet<>();
             for (Rect object : detectedObjects.toArray()) {
                 Rect objectCoordinates = new Rect(object.x, object.y, object.width, object.height);
                 Mat croppedObject = new Mat(frame, objectCoordinates);
 
-                Mat resizedImg = new Mat(IMAGE_WIDTH, IMAGE_HEIGHT, CvType.CV_32FC4);
-                Imgproc.resize(croppedObject, resizedImg, new Size(IMAGE_WIDTH, IMAGE_HEIGHT));
+                Mat resizedImg = new Mat(IMAGE_SIZE, IMAGE_SIZE, CvType.CV_32FC4);
+                Imgproc.resize(croppedObject, resizedImg, new Size(IMAGE_SIZE, IMAGE_SIZE));
 
                 float[] floatArrImg = convertMatToFloatArray(resizedImg);
 
                 long[] outputResult = {0, 0};
-                signClassifier.getTensorFlow().feed(INPUT_NODE, floatArrImg, 1,
-                        IMAGE_WIDTH, IMAGE_HEIGHT, COLOR_CHANNELS);
-                signClassifier.getTensorFlow().run(new String[]{OUTPUT_NODE}, false);
-                signClassifier.getTensorFlow().fetch("prediction", outputResult);
-                detectedSigns.add(outputResult[0]);
+                signClassifier.feed(INPUT_NODE, floatArrImg, 1,
+                        IMAGE_SIZE, IMAGE_SIZE, COLOR_CHANNELS);
+                signClassifier.run(new String[] { OUTPUT_NODE }, false);
+                signClassifier.fetch("prediction", outputResult);
+                detectedSigns.add((int) outputResult[0]);
             }
             return detectedSigns;
         }
 
         @Override
-        protected void onPostExecute(List<Long> detectedSigns) {
-            HashSet noDupSet = new HashSet(detectedSigns);
-
-            Log.i("wtf", String.valueOf(noDupSet.size()));
+        protected void onPostExecute(Set<Integer> detectedSigns) {
             if (detectedSigns.size() != 0) {
-                Log.i("wtf", "begin");
-                for (Long detectedSign : detectedSigns) {
-                    Log.i("wtf", String.valueOf(detectedSign));
-                    //signView.setImageResource(signImages.get(detectedSigns.get(0)));
+                for (Integer detectedSign : detectedSigns) {
+                    if (detectedSign != 44 && !signList.contains(signImages.get(detectedSign))) {
+                        signList.add(signImages.get(detectedSign));
+                    }
                 }
-                Log.i("wtf", "end");
+                signAdapter.notifyDataSetChanged();
             }
         }
 
@@ -182,17 +184,17 @@ public class HomeActivity extends AppCompatActivity
             Utils.matToBitmap(image, bitmap);
 
             int[] intValues = new int[32 * 32];
-            float[] result = new float[32 * 32 * 3];
+            float[] floatImage = new float[IMAGE_SIZE * IMAGE_SIZE * COLOR_CHANNELS];
 
             bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0,
                     bitmap.getWidth(), bitmap.getHeight());
             for (int i = 0; i < intValues.length; ++i) {
                 int tmp = intValues[i];
-                result[i * 3 + 0] = ((tmp >> 16) & 0xFF) / 255.0F;
-                result[i * 3 + 1] = ((tmp >> 8) & 0xFF) / 255.0F;
-                result[i * 3 + 2] = (tmp & 0xFF) / 255.0F;
+                floatImage[i * 3 + 0] = ((tmp >> 16) & 0xFF) / 255.0F;
+                floatImage[i * 3 + 1] = ((tmp >> 8) & 0xFF) / 255.0F;
+                floatImage[i * 3 + 2] = (tmp & 0xFF) / 255.0F;
             }
-            return result;
+            return floatImage;
         }
     }
 
@@ -227,7 +229,7 @@ public class HomeActivity extends AppCompatActivity
     private void initSignImages() {
         signImages = new HashMap<>();
 
-        long count = 0;
+        int count = 0;
         for (Field field : R.drawable.class.getFields()) {
             if (field.getName().contains("sign_number")) {
                 try {
