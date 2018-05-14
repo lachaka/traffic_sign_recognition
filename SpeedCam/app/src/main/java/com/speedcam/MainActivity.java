@@ -15,12 +15,12 @@ public class MainActivity extends AppCompatActivity
         implements ActivityCompat.OnRequestPermissionsResultCallback {
 
     public static final String TAG = "MainActivity";
-    private static final int REQUEST_PERMISSION_CODE = 0;
+    private static final int REQUEST_PERMISSION_CODE = 101;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (checkIfAlreadyHavePermissions()) {
+        if (checkForGrantedPermissions()) {
             Toast.makeText(MainActivity.this,
                     R.string.grantedPermissions, Toast.LENGTH_SHORT).show();
             switchActivity();
@@ -33,14 +33,17 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    private boolean checkIfAlreadyHavePermissions() {
+    private boolean checkForGrantedPermissions() {
         int cameraPermission = ContextCompat
                 .checkSelfPermission(this, Manifest.permission.CAMERA);
-        int locationPermission = ContextCompat
+        int fineLocationPermission = ContextCompat
                 .checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
+        int coarseLocationPermission = ContextCompat
+                .checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION);
 
         return cameraPermission == PackageManager.PERMISSION_GRANTED &&
-                locationPermission == PackageManager.PERMISSION_GRANTED;
+                fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                coarseLocationPermission == PackageManager.PERMISSION_GRANTED;
     }
 
     @Override

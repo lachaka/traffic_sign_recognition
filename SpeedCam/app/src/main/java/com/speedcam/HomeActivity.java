@@ -1,7 +1,11 @@
 package com.speedcam;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -9,6 +13,7 @@ import android.util.Log;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 import android.widget.ListView;
+import android.widget.TextView;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -38,26 +43,29 @@ import java.util.Set;
 import static com.speedcam.Constants.COLOR_CHANNELS;
 import static com.speedcam.Constants.IMAGE_SIZE;
 import static com.speedcam.Constants.INPUT_NODE;
+import static com.speedcam.Constants.MIN_DISTANCE_UPDATE;
+import static com.speedcam.Constants.MIN_TIME_UPDATE;
 import static com.speedcam.Constants.OUTPUT_NODE;
+import static com.speedcam.Constants.SPEED_UNITS;
 
 
 public class HomeActivity extends AppCompatActivity
-        implements CameraBridgeViewBase.CvCameraViewListener2 {
+        implements CameraBridgeViewBase.CvCameraViewListener2, LocationListener {
 
     private static final String TAG = HomeActivity.class.getName();
 
     private TensorFlowInferenceInterface signClassifier;
     private CascadeClassifier cascadeClassifier;
-
-    private JavaCameraView cameraView;
-
-    private Mat frame;
     private File mCascadeFile;
-    ListView signView;
-    private HashMap<Integer, Integer> signImages;
 
+    private ListView signView;
+    private JavaCameraView cameraView;
+    private Mat frame;
+
+    private HashMap<Integer, Integer> signImages;
     private ArrayList<Integer> signList;
     private SignAdapter signAdapter;
+
 
     BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -71,12 +79,15 @@ public class HomeActivity extends AppCompatActivity
         }
     };
 
+    @SuppressLint("MissingPermission")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_home);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         signList = new ArrayList<>();
 
         signView = findViewById(R.id.signList);
@@ -88,8 +99,13 @@ public class HomeActivity extends AppCompatActivity
         initSignImages();
         cameraView = findViewById(R.id.camera_view);
         cameraView.setVisibility(SurfaceView.VISIBLE);
-        cameraView.setMaxFrameSize(320,480);
         cameraView.setCvCameraViewListener(this);
+
+        LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
+                                        MIN_TIME_UPDATE, MIN_DISTANCE_UPDATE, this);
+        this.updateSpeed(0);
     }
 
     @Override
@@ -131,9 +147,38 @@ public class HomeActivity extends AppCompatActivity
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         frame = inputFrame.rgba();
-      //  Mat croppedFrame = frame.submat(0, frame.cols(), frame.cols() / 2, frame.cols());
-        new SignRecognition().execute(cascadeClassifier, frame);
+        Mat croppedFrame = frame.submat(0, frame.rows(), frame.cols() / 2, frame.cols());
+
+        new SignRecognition().execute(cascadeClassifier, croppedFrame);
         return frame;
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        if(location != null)
+        {
+            this.updateSpeed(location.getSpeed());
+        }
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
+        // TODO Auto-generated method stub
+    }
+
+    private void updateSpeed(float currentSpeed) {
+        TextView speedView = this.findViewById(R.id.speed_view);
+        speedView.setText(currentSpeed + " " + SPEED_UNITS);
     }
 
     private class SignRecognition extends AsyncTask<Object, Void, Set<Integer>> {
