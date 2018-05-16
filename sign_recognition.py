@@ -15,7 +15,7 @@ IMAGE_WIDTH = 32
 IMAGE_LENGTH = 32
 
 sign_cascade = cv2.CascadeClassifier('./opencv_training/haar_classifier/cascade.xml')
-video = cv2.VideoCapture('PATH_TO_CHANGE')
+video = cv2.VideoCapture('./TS2011video4.wmv')
 
 ret, frame = video.read()
 h, w, channel = frame.shape
@@ -36,10 +36,11 @@ while (video.isOpened()):
 
     for (x, y, w, h) in signs:
         cropped_sign = frame[y: y + h, x: x + w]
-        resized_sign = skimage.transform.resize(cropped_sign, (32, 32))
+
+        resized_sign = skimage.transform.resize(cv2.cvtColor(cropped_sign, cv2.COLOR_BGR2RGB), (IMAGE_WIDTH, IMAGE_LENGTH))
     
-        predicted = sess.run(["prediction:0"],
-                                  feed_dict={"images_ph:0": [resized_sign]})[0][0]
+        predicted = sess.run("prediction:0",
+                                  feed_dict={"images:0": [resized_sign]})[0]
 
         if predicted != NEG_IMAGE_CLASS:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 2)
