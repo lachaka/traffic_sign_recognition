@@ -2,12 +2,13 @@ package com.speedcam;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.SurfaceView;
@@ -20,7 +21,6 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.JavaCameraView;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.android.Utils;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
@@ -47,6 +47,7 @@ import static com.speedcam.Constants.MIN_DISTANCE_UPDATE;
 import static com.speedcam.Constants.MIN_TIME_UPDATE;
 import static com.speedcam.Constants.OUTPUT_NODE;
 import static com.speedcam.Constants.SPEED_UNITS;
+import static com.speedcam.Constants.TIME_POP_SIGN_LISTIVEW;
 
 
 public class HomeActivity extends AppCompatActivity
@@ -66,6 +67,7 @@ public class HomeActivity extends AppCompatActivity
     private ArrayList<Integer> signList;
     private SignAdapter signAdapter;
 
+    private Handler handler = new Handler(Looper.getMainLooper());
 
     BaseLoaderCallback loaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -78,6 +80,17 @@ public class HomeActivity extends AppCompatActivity
             }
         }
     };
+
+    private Runnable runnable = new Runnable() {
+        public void run() {
+            if (signList.size() > 2) {
+                signList.remove(signList.size() - 1);
+                signAdapter.notifyDataSetChanged();
+            }
+            handler.postDelayed(this, TIME_POP_SIGN_LISTIVEW);
+        }
+    };
+
 
     @SuppressLint("MissingPermission")
     @Override
@@ -106,7 +119,9 @@ public class HomeActivity extends AppCompatActivity
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
                                         MIN_TIME_UPDATE, MIN_DISTANCE_UPDATE, this);
         this.updateSpeed(0);
+        handler.postDelayed(runnable, TIME_POP_SIGN_LISTIVEW);
     }
+
 
     @Override
     protected void onPause() {
@@ -132,6 +147,7 @@ public class HomeActivity extends AppCompatActivity
     protected void onDestroy() {
         super.onDestroy();
         cameraView.disableView();
+        signClassifier.close();
     }
 
     @Override
@@ -147,16 +163,14 @@ public class HomeActivity extends AppCompatActivity
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         frame = inputFrame.rgba();
-        Mat croppedFrame = frame.submat(0, frame.rows(), frame.cols() / 2, frame.cols());
+        new SignRecognition().execute(frame);
 
-        new SignRecognition().execute(cascadeClassifier, croppedFrame);
         return frame;
     }
 
     @Override
     public void onLocationChanged(Location location) {
-        if(location != null)
-        {
+        if(location != null) {
             this.updateSpeed(location.getSpeed());
         }
     }
@@ -178,37 +192,31 @@ public class HomeActivity extends AppCompatActivity
 
     private void updateSpeed(float currentSpeed) {
         TextView speedView = this.findViewById(R.id.speed_view);
-        speedView.setText(currentSpeed + " " + SPEED_UNITS);
+        speedView.setText((int)currentSpeed + " " + SPEED_UNITS);
     }
 
     private class SignRecognition extends AsyncTask<Object, Void, Set<Integer>> {
         @Override
         protected Set doInBackground(Object[] objects) {
-            CascadeClassifier cascadeClassifier = (CascadeClassifier) objects[0];
-            Mat frame = (Mat) objects[1];
+            Mat frame = (Mat) objects[0];
 
             MatOfRect detectedObjects = new MatOfRect();
-            Mat frameGray = new Mat();
-            Imgproc.cvtColor(frame, frameGray, Imgproc.COLOR_BGRA2GRAY);
+            cascadeClassifier.detectMultiScale(frame, detectedObjects);
 
-            cascadeClassifier.detectMultiScale(frameGray, detectedObjects);
             Set<Integer> detectedSigns = new HashSet<>();
             for (Rect object : detectedObjects.toArray()) {
                 Rect objectCoordinates = new Rect(object.x, object.y, object.width, object.height);
                 Mat croppedObject = new Mat(frame, objectCoordinates);
 
-                Mat resizedImg = new Mat(IMAGE_SIZE, IMAGE_SIZE, CvType.CV_32FC4);
+                Mat resizedImg = new Mat(IMAGE_SIZE, IMAGE_SIZE, CvType.CV_32FC3);
                 Imgproc.resize(croppedObject, resizedImg, new Size(IMAGE_SIZE, IMAGE_SIZE));
 
                 float[] floatArrImg = convertMatToFloatArray(resizedImg);
 
-                long[] outputResult = {0, 0};
-                signClassifier.feed(INPUT_NODE, floatArrImg, 1,
-                        IMAGE_SIZE, IMAGE_SIZE, COLOR_CHANNELS);
-                signClassifier.run(new String[] { OUTPUT_NODE }, false);
-                signClassifier.fetch("prediction", outputResult);
-                detectedSigns.add((int) outputResult[0]);
+                int prediction = predictSign(floatArrImg);
+                detectedSigns.add(prediction);
             }
+
             return detectedSigns;
         }
 
@@ -225,21 +233,27 @@ public class HomeActivity extends AppCompatActivity
         }
 
         private float[] convertMatToFloatArray(Mat image) {
-            Bitmap bitmap = Bitmap.createBitmap(image.cols(),image.rows(), Bitmap.Config.ARGB_8888);
-            Utils.matToBitmap(image, bitmap);
-
-            int[] intValues = new int[32 * 32];
-            float[] floatImage = new float[IMAGE_SIZE * IMAGE_SIZE * COLOR_CHANNELS];
-
-            bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0,
-                    bitmap.getWidth(), bitmap.getHeight());
-            for (int i = 0; i < intValues.length; ++i) {
-                int tmp = intValues[i];
-                floatImage[i * 3 + 0] = ((tmp >> 16) & 0xFF) / 255.0F;
-                floatImage[i * 3 + 1] = ((tmp >> 8) & 0xFF) / 255.0F;
-                floatImage[i * 3 + 2] = (tmp & 0xFF) / 255.0F;
+            float[] floatImage = new float[image.rows() * image.cols() * 3];
+            int index = 0;
+            for (int i = 0; i < image.rows(); i++) {
+                for (int j = 0; j < image.cols(); j++) {
+                    floatImage[index] = (float) ((image.get(i, j)[0]) / 255.0);
+                    floatImage[index + 1] = (float) (image.get(i, j)[1] / 255.0);
+                    floatImage[index + 2] = (float) (image.get(i, j)[2] / 255.0);
+                    index += 3;
+                }
             }
             return floatImage;
+        }
+
+        private int predictSign(float[] floatArrImg) {
+            long[] outputResult = {0, 0};
+
+            signClassifier.feed(INPUT_NODE, floatArrImg, 1,
+                    IMAGE_SIZE, IMAGE_SIZE, COLOR_CHANNELS);
+            signClassifier.run(new String[] { OUTPUT_NODE }, false);
+            signClassifier.fetch("prediction", outputResult);
+            return (int) outputResult[0];
         }
     }
 
