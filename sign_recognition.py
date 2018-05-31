@@ -1,8 +1,7 @@
 # Detecting traffic sign from a video file
-# Change 'PATH_TO_CHANGE'.
 
 
-import cv2
+import cv2, sys
 import numpy as np
 import skimage.transform
 from skimage import io
@@ -12,9 +11,12 @@ import tensorflow as tf
 NEG_IMAGE_CLASS = 43
 IMAGE_WIDTH = 32
 IMAGE_LENGTH = 32
+COLOR_CHANNELS = 3
+
+video_path = sys.argv[1]
 
 sign_cascade = cv2.CascadeClassifier('./opencv_training/haar_classifier/cascade.xml')
-video = cv2.VideoCapture('./TS2011video4.wmv')
+video = cv2.VideoCapture(video_path)
 
 ret, frame = video.read()
 h, w, channel = frame.shape
@@ -37,9 +39,9 @@ while (video.isOpened()):
         cropped_sign = frame[y: y + h, x: x + w]
 
         resized_sign = skimage.transform.resize(cv2.cvtColor(cropped_sign, cv2.COLOR_BGR2RGB), (IMAGE_WIDTH, IMAGE_LENGTH))
-    
+        reshaped_sign = resized_sign.reshape(IMAGE_WIDTH * IMAGE_LENGTH * COLOR_CHANNELS)
         predicted = sess.run("prediction:0",
-                                  feed_dict={"images:0": [resized_sign]})[0]
+                                  feed_dict={"images:0": [reshaped_sign]})[0]
 
         if predicted != NEG_IMAGE_CLASS:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 2)

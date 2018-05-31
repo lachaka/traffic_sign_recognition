@@ -45,6 +45,7 @@ import static com.speedcam.Constants.IMAGE_SIZE;
 import static com.speedcam.Constants.INPUT_NODE;
 import static com.speedcam.Constants.MIN_DISTANCE_UPDATE;
 import static com.speedcam.Constants.MIN_TIME_UPDATE;
+import static com.speedcam.Constants.NEGATIVE_SIGN;
 import static com.speedcam.Constants.OUTPUT_NODE;
 import static com.speedcam.Constants.SPEED_UNITS;
 import static com.speedcam.Constants.TIME_POP_SIGN_LISTIVEW;
@@ -201,7 +202,8 @@ public class HomeActivity extends AppCompatActivity
             Mat frame = (Mat) objects[0];
 
             MatOfRect detectedObjects = new MatOfRect();
-            cascadeClassifier.detectMultiScale(frame, detectedObjects);
+            cascadeClassifier.detectMultiScale(frame, detectedObjects, 1.3, 5, 0,
+                    new Size(Math.round(frame.rows() * 0.2f), frame.cols() * 0.2f), new Size());
 
             Set<Integer> detectedSigns = new HashSet<>();
             for (Rect object : detectedObjects.toArray()) {
@@ -224,7 +226,7 @@ public class HomeActivity extends AppCompatActivity
         protected void onPostExecute(Set<Integer> detectedSigns) {
             if (detectedSigns.size() != 0) {
                 for (Integer detectedSign : detectedSigns) {
-                    if (detectedSign != 44 && !signList.contains(signImages.get(detectedSign))) {
+                    if (detectedSign != NEGATIVE_SIGN && !signList.contains(signImages.get(detectedSign))) {
                         signList.add(0, signImages.get(detectedSign));
                     }
                 }

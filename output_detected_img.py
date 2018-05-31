@@ -1,9 +1,10 @@
 # Output detected images from video.
-# Change 'PATH_TO_CHANGE'.
-import cv2
+import cv2, sys
+
+video_path = sys.argv[1]
 
 cv_cascade = cv2.CascadeClassifier('./opencv_data/cascade.xml')
-video = cv2.VideoCapture('PATH_TO_CHANGE')
+video = cv2.VideoCapture(video_path)
 
 output_file_name = 0
 output_dir = 'PATH_TO_CHANGE'
